@@ -1,0 +1,101 @@
+"""
+COBOLパーサーのユニットテスト
+"""
+import pytest
+import os
+from src.parser.cobol_parser import CobolParser
+
+
+SAMPLE_FILE = os.path.join(os.path.dirname(__file__), "../samples/SAMPLE01.cbl")
+
+
+class TestCobolParser:
+
+    def setup_method(self):
+        self.parser = CobolParser()
+
+    def test_parse_file_exists(self):
+        """サンプルファイルが存在すること"""
+        assert os.path.isfile(SAMPLE_FILE), f"サンプルファイルが見つかりません: {SAMPLE_FILE}"
+
+    def test_parse_returns_result(self):
+        """パースが結果を返すこと"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        assert result is not None
+
+    def test_parse_no_errors(self):
+        """サンプルファイルでエラーが出ないこと"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        assert result.errors == [], f"エラーが発生しました: {result.errors}"
+
+    def test_parse_file_definitions(self):
+        """SELECT句からファイル定義が3件抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        assert len(result.file_definitions) == 3, \
+            f"ファイル定義数が不正です（期待：3件、実際：{len(result.file_definitions)}件）"
+
+    def test_parse_file_names(self):
+        """SELECT句のファイル名が正しく抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        file_names = [fd.file_name for fd in result.file_definitions]
+        assert "URIAGE-FILE" in file_names
+        assert "TOKUISAKI-FILE" in file_names
+        assert "SHUUKEI-FILE" in file_names
+
+    def test_parse_perform_entries(self):
+        """PERFORM文が1件以上抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        assert len(result.perform_entries) > 0, "PERFORM文が検出されませんでした"
+
+    def test_parse_exception_entries(self):
+        """例外処理句が1件以上抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        assert len(result.exception_entries) > 0, "例外処理が検出されませんでした"
+
+    def test_exception_types(self):
+        """INVALID KEY と AT END と ON SIZE ERROR が検出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        types = [e.exception_type for e in result.exception_entries]
+        assert "INVALID KEY" in types
+        assert "AT END" in types
+        assert "ON SIZE ERROR" in types
+
+    def test_file_not_found(self):
+        """存在しないファイルはエラーリストに記録されること"""
+        result = self.parser.parse_file("存在しないファイル.cbl")
+        assert len(result.errors) > 0
+
+
+class TestExcelGenerator:
+
+    def test_generate_excel(self, tmp_path):
+        """Excelファイルが正常に生成されること"""
+        from src.parser.cobol_parser import CobolParser
+        from src.generator.excel_generator import generate_excel
+
+        parser = CobolParser()
+        result = parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+
+        output_path = str(tmp_path / "test_output.xlsx")
+        generate_excel(result, output_path)
+
+        assert os.path.isfile(output_path), "Excelファイルが生成されませんでした"
+
+    def test_excel_has_4_sheets(self, tmp_path):
+        """Excelファイルに4シートが存在すること"""
+        import openpyxl
+        from src.parser.cobol_parser import CobolParser
+        from src.generator.excel_generator import generate_excel
+
+        parser = CobolParser()
+        result = parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+
+        output_path = str(tmp_path / "test_output.xlsx")
+        generate_excel(result, output_path)
+
+        wb = openpyxl.load_workbook(output_path)
+        assert len(wb.sheetnames) == 4, f"シート数が不正です: {wb.sheetnames}"
+        assert "表紙" in wb.sheetnames
+        assert "IO定義" in wb.sheetnames
+        assert "処理フロー" in wb.sheetnames
+        assert "例外処理" in wb.sheetnames
