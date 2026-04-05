@@ -127,3 +127,57 @@ class TestExcelGenerator:
         assert "IO定義" in wb.sheetnames
         assert "処理フロー" in wb.sheetnames
         assert "例外処理" in wb.sheetnames
+
+
+class TestWordGenerator:
+
+    def test_generate_word(self, tmp_path):
+        """Wordファイルが正常に生成されること"""
+        from src.parser.cobol_parser import CobolParser
+        from src.generator.word_generator import generate_word
+
+        parser = CobolParser()
+        result = parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+
+        output_path = str(tmp_path / "test_output.docx")
+        generate_word(result, output_path)
+
+        assert os.path.isfile(output_path), "Wordファイルが生成されませんでした"
+
+    def test_word_contains_sections(self, tmp_path):
+        """Wordファイルに4セクションの見出しが含まれること"""
+        from docx import Document
+        from src.parser.cobol_parser import CobolParser
+        from src.generator.word_generator import generate_word
+
+        parser = CobolParser()
+        result = parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+
+        output_path = str(tmp_path / "test_output.docx")
+        generate_word(result, output_path)
+
+        doc = Document(output_path)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "バッチ処理 業務設計書" in text
+        assert "I/O定義一覧" in text
+        assert "処理フロー" in text
+        assert "例外処理一覧" in text
+
+    def test_word_io_rows(self, tmp_path):
+        """I/O定義テーブルにファイル定義の行が含まれること"""
+        from docx import Document
+        from src.parser.cobol_parser import CobolParser
+        from src.generator.word_generator import generate_word
+
+        parser = CobolParser()
+        result = parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+
+        output_path = str(tmp_path / "test_output.docx")
+        generate_word(result, output_path)
+
+        doc = Document(output_path)
+        all_text = "\n".join(
+            cell.text for table in doc.tables for row in table.rows for cell in row.cells
+        )
+        assert "URIAGE-FILE" in all_text
+        assert "TOKUISAKI-FILE" in all_text

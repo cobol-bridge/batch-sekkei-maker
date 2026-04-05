@@ -16,6 +16,7 @@ except ImportError:
 
 from src.parser.cobol_parser import CobolParser
 from src.generator.excel_generator import generate_excel
+from src.generator.word_generator import generate_word
 
 
 class App:
@@ -32,6 +33,7 @@ class App:
         self._selected_file = tk.StringVar()
         self._output_dir = tk.StringVar()
         self._encoding = tk.StringVar(value="shift_jis")
+        self._output_format = tk.StringVar(value="excel")
         self._status = tk.StringVar(value="COBOLソースファイルを選択してください")
 
         self._build_ui()
@@ -65,8 +67,15 @@ class App:
         ttk.Radiobutton(enc_frame, text="Shift-JIS", variable=self._encoding, value="shift_jis").pack(side="left")
         ttk.Radiobutton(enc_frame, text="UTF-8", variable=self._encoding, value="utf-8").pack(side="left", padx=20)
 
+        # 出力形式選択
+        ttk.Label(frame, text="出力形式：").grid(row=4, column=0, sticky="w", pady=6)
+        fmt_frame = ttk.Frame(frame)
+        fmt_frame.grid(row=4, column=1, sticky="w", padx=6)
+        ttk.Radiobutton(fmt_frame, text="Excel (.xlsx)", variable=self._output_format, value="excel").pack(side="left")
+        ttk.Radiobutton(fmt_frame, text="Word (.docx)", variable=self._output_format, value="word").pack(side="left", padx=20)
+
         # 区切り線
-        ttk.Separator(frame, orient="horizontal").grid(row=4, column=0, columnspan=3, sticky="ew", pady=16)
+        ttk.Separator(frame, orient="horizontal").grid(row=5, column=0, columnspan=3, sticky="ew", pady=16)
 
         # 実行ボタン
         self._run_btn = ttk.Button(
@@ -76,21 +85,21 @@ class App:
             width=30,
             bootstyle="primary" if USE_BOOTSTRAP else None
         )
-        self._run_btn.grid(row=5, column=0, columnspan=3, pady=6)
+        self._run_btn.grid(row=6, column=0, columnspan=3, pady=6)
 
         # プログレスバー
         self._progress = ttk.Progressbar(
             frame, mode="indeterminate", length=400,
             bootstyle="info" if USE_BOOTSTRAP else None
         )
-        self._progress.grid(row=6, column=0, columnspan=3, pady=8)
+        self._progress.grid(row=7, column=0, columnspan=3, pady=8)
 
         # ステータス表示
         ttk.Label(
             frame,
             textvariable=self._status,
             foreground="#555"
-        ).grid(row=7, column=0, columnspan=3)
+        ).grid(row=8, column=0, columnspan=3)
 
         # 注意書き
         ttk.Label(
@@ -98,7 +107,7 @@ class App:
             text="※ 本ツールは完全オフラインで動作します。ソースコードは外部に送信されません。",
             font=("メイリオ", 8),
             foreground="#999"
-        ).grid(row=8, column=0, columnspan=3, pady=(16, 0))
+        ).grid(row=9, column=0, columnspan=3, pady=(16, 0))
 
     def _select_cobol_file(self):
         path = filedialog.askopenfilename(
@@ -144,9 +153,14 @@ class App:
             result = parser.parse_file(src, encoding=self._encoding.get())
 
             base_name = os.path.splitext(os.path.basename(src))[0]
-            output_path = os.path.join(out_dir, f"{base_name}_設計書.xlsx")
+            fmt = self._output_format.get()
 
-            generate_excel(result, output_path)
+            if fmt == "word":
+                output_path = os.path.join(out_dir, f"{base_name}_設計書.docx")
+                generate_word(result, output_path)
+            else:
+                output_path = os.path.join(out_dir, f"{base_name}_設計書.xlsx")
+                generate_excel(result, output_path)
 
             self.root.after(0, self._on_success, output_path, result.errors)
         except Exception as e:
