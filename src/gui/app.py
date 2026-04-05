@@ -5,6 +5,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import threading
 import os
+import logging
+from datetime import datetime
 
 try:
     import ttkbootstrap as ttk
@@ -147,14 +149,36 @@ class App:
         thread = threading.Thread(target=self._execute, args=(src, out_dir), daemon=True)
         thread.start()
 
+    def _setup_logger(self, log_path: str) -> logging.Logger:
+        logger = logging.getLogger("batch_sekkei_maker")
+        logger.setLevel(logging.DEBUG)
+        logger.handlers.clear()
+        fh = logging.FileHandler(log_path, encoding="utf-8")
+        fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logger.addHandler(fh)
+        return logger
+
     def _execute(self, src: str, out_dir: str):
         try:
+            base_name = os.path.splitext(os.path.basename(src))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_path = os.path.join(out_dir, f"{base_name}_{timestamp}.log")
+            logger = self._setup_logger(log_path)
+
+            logger.info(f"解析開始: {src}")
+            logger.info(f"文字コード: {self._encoding.get()}")
+
             parser = CobolParser()
             result = parser.parse_file(src, encoding=self._encoding.get())
 
-            base_name = os.path.splitext(os.path.basename(src))[0]
-            fmt = self._output_format.get()
+            for err in result.errors:
+                logger.error(err)
 
+            logger.info(f"ファイル定義: {len(result.file_definitions)}件")
+            logger.info(f"PERFORM: {len(result.perform_entries)}件")
+            logger.info(f"例外処理: {len(result.exception_entries)}件")
+
+            fmt = self._output_format.get()
             if fmt == "word":
                 output_path = os.path.join(out_dir, f"{base_name}_設計書.docx")
                 generate_word(result, output_path)
@@ -162,18 +186,23 @@ class App:
                 output_path = os.path.join(out_dir, f"{base_name}_設計書.xlsx")
                 generate_excel(result, output_path)
 
-            self.root.after(0, self._on_success, output_path, result.errors)
+            logger.info(f"出力完了: {output_path}")
+            self.root.after(0, self._on_success, output_path, result.errors, log_path)
         except Exception as e:
+            if 'logger' in locals():
+                logger.exception("予期せぬエラー")
             self.root.after(0, self._on_error, str(e))
 
-    def _on_success(self, output_path: str, errors: list):
+    def _on_success(self, output_path: str, errors: list, log_path: str):
         self._progress.stop()
         self._run_btn.config(state="normal")
         self._status.set(f"✅ 生成完了：{output_path}")
 
         msg = f"設計書を生成しました。\n\n{output_path}"
         if errors:
-            msg += f"\n\n⚠ 解析中に {len(errors)} 件の警告がありました。\nログファイルを確認してください。"
+            msg += f"\n\n⚠ 解析中に {len(errors)} 件の警告がありました。\nログ：{log_path}"
+        else:
+            msg += f"\n\nログ：{log_path}"
         messagebox.showinfo("完了", msg)
 
     def _on_error(self, error_msg: str):
