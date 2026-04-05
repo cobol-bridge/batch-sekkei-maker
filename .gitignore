@@ -21,6 +21,8 @@ output/
 # テスト出力
 *.xlsx
 *.docx
+!assets/*.xlsx
+!assets/*.docx
 .pytest_cache/
 .coverage
 
