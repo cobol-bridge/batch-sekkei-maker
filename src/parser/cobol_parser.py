@@ -11,6 +11,10 @@ class FileDefinition:
     file_name: str = ""        # ファイル名（SELECT句）
     fd_name: str = ""          # FD名
     record_length: str = ""    # レコード長
+    assign_to: str = ""        # 物理ファイル名（ASSIGN TO）
+    organization: str = ""     # ファイル編成（SEQUENTIAL/INDEXED/RELATIVE）
+    access_mode: str = ""      # アクセスモード（SEQUENTIAL/RANDOM/DYNAMIC）
+    record_key: str = ""       # レコードキー（INDEXEDのみ）
     fields: list = field(default_factory=list)  # フィールド一覧
 
 
@@ -104,12 +108,36 @@ class CobolParser:
         return clean
 
     def _parse_select_clauses(self, lines: list):
-        """SELECT句からファイル名を抽出"""
+        """SELECT句からファイル情報を抽出（複数行対応）"""
         full_text = " ".join(lines).upper()
-        # SELECT ファイル名 ASSIGN TO ...
-        pattern = r"SELECT\s+(\S+)\s+ASSIGN"
-        for match in re.finditer(pattern, full_text):
-            fd = FileDefinition(file_name=match.group(1))
+
+        # SELECT句ブロックを取得（次のSELECTまたはFD句まで）
+        # ※ピリオド区切りはしない（ASSIGN TO 'FILE.DAT' のピリオドと混同するため）
+        select_block_pattern = r"(SELECT\s+\S+.*?)(?=SELECT\s|\bFD\b|\Z)"
+        for block_match in re.finditer(select_block_pattern, full_text, re.DOTALL):
+            block = block_match.group(1)
+
+            name_match = re.search(r"SELECT\s+(\S+)", block)
+            if not name_match:
+                continue
+            fd = FileDefinition(file_name=name_match.group(1))
+
+            assign_match = re.search(r"ASSIGN\s+TO\s+['\"]?(\S+?)['\"]?(?:\s|$)", block)
+            if assign_match:
+                fd.assign_to = assign_match.group(1).strip("'\".,")
+
+            org_match = re.search(r"ORGANIZATION\s+IS\s+(\S+)", block)
+            if org_match:
+                fd.organization = org_match.group(1).rstrip(".")
+
+            access_match = re.search(r"ACCESS\s+MODE\s+IS\s+(\S+)", block)
+            if access_match:
+                fd.access_mode = access_match.group(1).rstrip(".")
+
+            key_match = re.search(r"RECORD\s+KEY\s+IS\s+(\S+)", block)
+            if key_match:
+                fd.record_key = key_match.group(1).rstrip(".")
+
             self.result.file_definitions.append(fd)
 
     def _parse_fd_clauses(self, lines: list):
@@ -133,26 +161,32 @@ class CobolParser:
                 )
 
     def _parse_perform_statements(self, lines: list):
-        """PERFORM文から呼び出し階層を抽出"""
+        """PERFORM文から呼び出し階層を抽出（THRU対応）"""
         current_paragraph = ""
         perform_pattern = re.compile(
-            r"PERFORM\s+([\w\-]+)(\s+UNTIL|\s+VARYING|\s+TIMES)?", re.IGNORECASE
+            r"PERFORM\s+([\w\-]+)(?:\s+THRU\s+([\w\-]+))?(\s+UNTIL|\s+VARYING|\s+TIMES)?",
+            re.IGNORECASE
         )
         paragraph_pattern = re.compile(r"^([\w\-]+)\.$", re.IGNORECASE)
 
         for line in lines:
             stripped = line.strip().upper()
 
-            # 段落名の検出（行末がピリオドで終わる単語）
             para_match = paragraph_pattern.match(stripped)
             if para_match:
                 current_paragraph = para_match.group(1)
                 continue
 
-            # PERFORM文の検出
             for match in perform_pattern.finditer(stripped):
                 callee = match.group(1)
-                perform_type = match.group(2).strip() if match.group(2) else "PERFORM"
+                thru = match.group(2)
+                modifier = match.group(3)
+                if modifier:
+                    perform_type = modifier.strip()
+                elif thru:
+                    perform_type = f"THRU {thru}"
+                else:
+                    perform_type = "PERFORM"
                 entry = PerformEntry(
                     caller=current_paragraph,
                     callee=callee,
@@ -163,13 +197,14 @@ class CobolParser:
     def _parse_exception_handlers(self, lines: list):
         """例外処理句を抽出"""
         current_paragraph = ""
+        # NOT系を先に並べる（"AT END"が"NOT AT END"にマッチしないよう順序が重要）
         exception_keywords = [
-            "INVALID KEY",
             "NOT INVALID KEY",
-            "AT END",
             "NOT AT END",
-            "ON SIZE ERROR",
             "NOT ON SIZE ERROR",
+            "INVALID KEY",
+            "AT END",
+            "ON SIZE ERROR",
             "ON OVERFLOW",
         ]
         paragraph_pattern = re.compile(r"^([\w\-]+)\.$", re.IGNORECASE)

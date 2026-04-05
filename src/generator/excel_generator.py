@@ -95,12 +95,16 @@ def _create_io_sheet(wb, parse_result):
     """シート2：I/O定義一覧"""
     ws = wb.create_sheet("IO定義")
     ws.column_dimensions["A"].width = 5
-    ws.column_dimensions["B"].width = 25
-    ws.column_dimensions["C"].width = 25
-    ws.column_dimensions["D"].width = 15
-    ws.column_dimensions["E"].width = 30
+    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["C"].width = 22
+    ws.column_dimensions["D"].width = 12
+    ws.column_dimensions["E"].width = 20
+    ws.column_dimensions["F"].width = 18
+    ws.column_dimensions["G"].width = 18
+    ws.column_dimensions["H"].width = 22
 
-    headers = ["No", "ファイル名（SELECT）", "FD名", "レコード長", "備考"]
+    headers = ["No", "ファイル名（SELECT）", "FD名", "レコード長",
+               "物理ファイル名", "ファイル編成", "アクセスモード", "レコードキー"]
     for col, h in enumerate(headers, start=1):
         _apply_header(ws.cell(row=1, column=col), h)
 
@@ -114,7 +118,10 @@ def _create_io_sheet(wb, parse_result):
         _apply_body(ws.cell(row=row, column=2), fd.file_name or "（不明）")
         _apply_body(ws.cell(row=row, column=3), fd.fd_name or "（不明）")
         _apply_body(ws.cell(row=row, column=4), fd.record_length or "（不明）")
-        _apply_body(ws.cell(row=row, column=5), "")
+        _apply_body(ws.cell(row=row, column=5), fd.assign_to or "")
+        _apply_body(ws.cell(row=row, column=6), fd.organization or "")
+        _apply_body(ws.cell(row=row, column=7), fd.access_mode or "")
+        _apply_body(ws.cell(row=row, column=8), fd.record_key or "")
 
 
 def _create_flow_sheet(wb, parse_result):

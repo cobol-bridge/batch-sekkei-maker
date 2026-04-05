@@ -42,6 +42,34 @@ class TestCobolParser:
         assert "TOKUISAKI-FILE" in file_names
         assert "SHUUKEI-FILE" in file_names
 
+    def test_parse_organization(self):
+        """ORGANIZATION IS が正しく抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        fd_map = {fd.file_name: fd for fd in result.file_definitions}
+        assert fd_map["URIAGE-FILE"].organization == "SEQUENTIAL"
+        assert fd_map["TOKUISAKI-FILE"].organization == "INDEXED"
+
+    def test_parse_access_mode(self):
+        """ACCESS MODE IS が正しく抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        fd_map = {fd.file_name: fd for fd in result.file_definitions}
+        assert fd_map["TOKUISAKI-FILE"].access_mode == "RANDOM"
+
+    def test_parse_record_key(self):
+        """RECORD KEY IS が正しく抽出されること"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        fd_map = {fd.file_name: fd for fd in result.file_definitions}
+        assert fd_map["TOKUISAKI-FILE"].record_key == "TK-CODE"
+
+    def test_no_duplicate_exception_types(self):
+        """同一箇所・同一種別の例外が重複しないこと"""
+        result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
+        seen = set()
+        for e in result.exception_entries:
+            key = (e.location, e.exception_type)
+            assert key not in seen, f"例外が重複しています: {key}"
+            seen.add(key)
+
     def test_parse_perform_entries(self):
         """PERFORM文が1件以上抽出されること"""
         result = self.parser.parse_file(SAMPLE_FILE, encoding="utf-8")
