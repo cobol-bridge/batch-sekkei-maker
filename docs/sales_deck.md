@@ -126,6 +126,7 @@ COBOLソースファイルを選択
 
 ### お問い合わせ
 GitHub: https://github.com/cobol-bridge/batch-sekkei-maker
+Qiita記事: https://qiita.com/cobol_bridge/items/95d012cb0262d2a8c30d
 
 ---
 

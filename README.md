@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey)](https://github.com/cobol-bridge/batch-sekkei-maker/releases)
+[![Qiita](https://img.shields.io/badge/Qiita-記事を読む-55C500)](https://qiita.com/cobol_bridge/items/95d012cb0262d2a8c30d)
 
 ---
 
