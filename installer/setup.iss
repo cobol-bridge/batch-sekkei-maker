@@ -2,7 +2,7 @@
 ; Inno Setup 6.x
 
 #define AppName "バッチ設計書メーカー"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppPublisher "cobol-bridge"
 #define AppURL "https://github.com/cobol-bridge/batch-sekkei-maker"
 #define AppExeName "バッチ設計書メーカー.exe"
