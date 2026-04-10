@@ -1,4 +1,4 @@
-# バッチ設計書メーカー
+# バッチ設計書メーカー　｜　[English README](README_EN.md)
 
 > COBOLソースコードを読み込むだけで、業務設計書（Excel / Word）を自動生成するWindowsデスクトップアプリです。
 
