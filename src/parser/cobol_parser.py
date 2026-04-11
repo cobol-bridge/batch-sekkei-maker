@@ -15,7 +15,17 @@ class FileDefinition:
     organization: str = ""     # ファイル編成（SEQUENTIAL/INDEXED/RELATIVE）
     access_mode: str = ""      # アクセスモード（SEQUENTIAL/RANDOM/DYNAMIC）
     record_key: str = ""       # レコードキー（INDEXEDのみ）
+    io_mode: str = ""          # I/O区分（INPUT/OUTPUT/I-O/EXTEND）
     fields: list = field(default_factory=list)  # フィールド一覧
+
+
+@dataclass
+class FieldItem:
+    """レコードのフィールド定義（PIC句から抽出）"""
+    name: str = ""       # フィールド名
+    pic: str = ""        # PIC句
+    byte_len: int = 0    # バイト数（計算値）
+    start_pos: int = 0   # 開始位置（1始まり）
 
 
 @dataclass
@@ -82,6 +92,8 @@ class CobolParser:
         # 各セクションを解析
         self._parse_select_clauses(clean_lines)
         self._parse_fd_clauses(clean_lines)
+        self._parse_field_definitions(clean_lines)
+        self._parse_open_statements(clean_lines)
         self._parse_perform_statements(clean_lines)
         self._parse_exception_handlers(clean_lines)
 
@@ -107,9 +119,14 @@ class CobolParser:
                 clean.append(content)
         return clean
 
+    @staticmethod
+    def _join(lines: list) -> str:
+        """行リストをスペース区切りで結合して大文字化（パーサー共通）"""
+        return " ".join(lines).upper()
+
     def _parse_select_clauses(self, lines: list):
         """SELECT句からファイル情報を抽出（複数行対応）"""
-        full_text = " ".join(lines).upper()
+        full_text = self._join(lines)
 
         # SELECT句ブロックを取得（次のSELECTまたはFD句まで）
         # ※ピリオド区切りはしない（ASSIGN TO 'FILE.DAT' のピリオドと混同するため）
@@ -142,7 +159,7 @@ class CobolParser:
 
     def _parse_fd_clauses(self, lines: list):
         """FD句からレコード長を抽出してfile_definitionsに補完"""
-        full_text = " ".join(lines).upper()
+        full_text = self._join(lines)
         # FD ファイル名 RECORDING MODE ... RECORD CONTAINS XX CHARACTERS
         pattern = r"FD\s+(\S+).*?RECORD\s+CONTAINS\s+(\d+)"
         for match in re.finditer(pattern, full_text):
@@ -159,6 +176,75 @@ class CobolParser:
                 self.result.file_definitions.append(
                     FileDefinition(fd_name=fd_name, record_length=record_len)
                 )
+
+    def _parse_field_definitions(self, lines: list):
+        """FILE SECTIONのFD配下フィールド（05レベル）を抽出してfile_definitionsに補完"""
+        full_text = "\n".join(lines).upper()
+        # FD名 〜 次のFDまたはWORKING-STORAGEまでのブロックを取得
+        fd_block_pattern = re.compile(
+            r"FD\s+([\w\-]+).*?(?=\nFD\s|\nWORKING-STORAGE|\Z)",
+            re.IGNORECASE | re.DOTALL
+        )
+        pic_pattern = re.compile(
+            r"^\s*05\s+([\w\-]+)\s+PIC\s+([\w\(\)V9XSZBPb/,\.\+\-\*]+)",
+            re.IGNORECASE | re.MULTILINE
+        )
+
+        for fd_match in fd_block_pattern.finditer(full_text):
+            fd_name = fd_match.group(1).upper()
+            block = fd_match.group(0)
+
+            fields = []
+            pos = 1
+            for f_match in pic_pattern.finditer(block):
+                fname = f_match.group(1).upper()
+                pic = f_match.group(2).upper()
+                blen = self._calc_pic_bytes(pic)
+                fields.append(FieldItem(name=fname, pic=pic, byte_len=blen, start_pos=pos))
+                pos += blen
+
+            # 対応するfile_definitionに補完
+            for fd in self.result.file_definitions:
+                if fd.file_name == fd_name or fd.fd_name == fd_name:
+                    fd.fields = fields
+                    break
+
+    @staticmethod
+    def _calc_pic_bytes(pic: str) -> int:
+        """PIC句の文字列からバイト数を計算する"""
+        pic = pic.upper()
+        # V（仮想小数点）を除去
+        pic = re.sub(r'V[\w\(\)]*', '', pic)
+        # S（符号）を除去
+        pic = pic.replace('S', '')
+        # X(n) / 9(n) / A(n) などの繰り返し展開
+        total = 0
+        for m in re.finditer(r'[X9AZPB]\((\d+)\)', pic):
+            total += int(m.group(1))
+        # 括弧なしの文字（X, 9 など1文字ずつ）
+        remaining = re.sub(r'[X9AZPB]\(\d+\)', '', pic)
+        total += sum(1 for c in remaining if c in 'X9AZPB')
+        return total if total > 0 else 1
+
+    def _parse_open_statements(self, lines: list):
+        """OPEN文からI/O区分を抽出してfile_definitionsに補完"""
+        full_text = self._join(lines)
+        # OPEN INPUT/OUTPUT/I-O/EXTEND ファイル名1 ファイル名2 ...
+        # 次のOPENまたは文末まで
+        open_pattern = re.compile(
+            r"OPEN\s+(INPUT|OUTPUT|I-O|EXTEND)\s+((?:[\w\-]+\s*)+?)(?=OPEN\s|CLOSE\s|PERFORM\s|MOVE\s|READ\s|WRITE\s|IF\s|STOP\s|\Z)",
+            re.DOTALL
+        )
+        for match in open_pattern.finditer(full_text):
+            mode = match.group(1)
+            names_block = match.group(2)
+            file_names = re.findall(r"[\w\-]+", names_block)
+            for name in file_names:
+                for fd in self.result.file_definitions:
+                    if fd.file_name == name or fd.fd_name == name:
+                        if not fd.io_mode:
+                            fd.io_mode = mode
+                        break
 
     def _parse_perform_statements(self, lines: list):
         """PERFORM文から呼び出し階層を抽出（THRU対応）"""

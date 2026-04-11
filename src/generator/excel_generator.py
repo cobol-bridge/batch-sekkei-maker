@@ -49,6 +49,8 @@ def generate_excel(parse_result, output_path: str):
 
     _create_cover_sheet(wb, parse_result)
     _create_io_sheet(wb, parse_result)
+    _create_output_sheet(wb, parse_result)
+    _create_layout_sheets(wb, parse_result)
     _create_flow_sheet(wb, parse_result)
     _create_exception_sheet(wb, parse_result)
 
@@ -122,6 +124,105 @@ def _create_io_sheet(wb, parse_result):
         _apply_body(ws.cell(row=row, column=6), fd.organization or "")
         _apply_body(ws.cell(row=row, column=7), fd.access_mode or "")
         _apply_body(ws.cell(row=row, column=8), fd.record_key or "")
+
+
+def _create_output_sheet(wb, parse_result):
+    """シート3：出力ファイル一覧（このプログラムが何を出力するか）"""
+    ws = wb.create_sheet("出力ファイル")
+    ws.column_dimensions["A"].width = 5
+    ws.column_dimensions["B"].width = 25
+    ws.column_dimensions["C"].width = 25
+    ws.column_dimensions["D"].width = 12
+    ws.column_dimensions["E"].width = 20
+    ws.column_dimensions["F"].width = 30
+
+    headers = ["No", "ファイル名", "物理ファイル名", "I/O区分", "ファイル編成", "備考"]
+    for col, h in enumerate(headers, start=1):
+        _apply_header(ws.cell(row=1, column=col), h)
+
+    output_files = [fd for fd in parse_result.file_definitions
+                    if fd.io_mode in ("OUTPUT", "I-O", "EXTEND")]
+
+    if not output_files:
+        ws.cell(row=2, column=1).value = "（出力ファイルが検出されませんでした）"
+        return
+
+    io_label = {"OUTPUT": "出力", "I-O": "入出力", "EXTEND": "追記", "INPUT": "入力", "": ""}
+    for i, fd in enumerate(output_files, start=1):
+        row = i + 1
+        _apply_body(ws.cell(row=row, column=1), i)
+        _apply_body(ws.cell(row=row, column=2), fd.file_name or fd.fd_name or "（不明）")
+        _apply_body(ws.cell(row=row, column=3), fd.assign_to or "")
+        _apply_body(ws.cell(row=row, column=4), io_label.get(fd.io_mode, fd.io_mode))
+        _apply_body(ws.cell(row=row, column=5), fd.organization or "")
+        _apply_body(ws.cell(row=row, column=6), "")
+
+
+FIELD_COLORS = ["D6E4F0", "FFF2CC", "E2EFDA", "FCE4D6", "EAD1DC", "D9EAD3", "CFE2F3", "FFF9C4"]
+
+
+def _write_layout_cell(ws, row, col_start, col_end, value, fill, font):
+    if col_end > col_start:
+        ws.merge_cells(start_row=row, start_column=col_start, end_row=row, end_column=col_end)
+    cell = ws.cell(row=row, column=col_start)
+    cell.value = value
+    cell.fill = fill
+    cell.font = font
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    cell.border = thin_border
+
+
+def _create_layout_sheets(wb, parse_result):
+    """フィールドを持つファイルごとに帳票レイアウトシートを生成"""
+    for fd in parse_result.file_definitions:
+        if not fd.fields:
+            continue
+        sheet_name = f"レイアウト_{(fd.file_name or fd.fd_name)[:12]}"
+        ws = wb.create_sheet(sheet_name)
+        _build_layout_sheet(ws, fd)
+
+
+def _build_layout_sheet(ws, fd):
+    """1ファイル分の帳票レイアウトをExcelシートに描画"""
+    file_label = fd.file_name or fd.fd_name
+    total_bytes = sum(f.byte_len for f in fd.fields)
+
+    # タイトル行
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(total_bytes, 1))
+    title_cell = ws.cell(row=1, column=1)
+    title_cell.value = f"帳票レイアウト：{file_label}　（{fd.assign_to or ''}　レコード長:{total_bytes}バイト）"
+    title_cell.font = Font(name="メイリオ", size=11, bold=True, color="1F4E79")
+    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 20
+
+    # 桁位置マーカー行（5の倍数に番号）
+    for col in range(1, total_bytes + 1):
+        c = ws.cell(row=2, column=col)
+        if col % 5 == 1 or col == 1:
+            c.value = col
+            c.font = Font(name="メイリオ", size=7, color="888888")
+        c.alignment = Alignment(horizontal="center")
+        ws.column_dimensions[get_column_letter(col)].width = 2.2
+
+    ws.row_dimensions[2].height = 14
+
+    # フィールド名行（結合・色分け）
+    ws.row_dimensions[3].height = 28
+    ws.row_dimensions[4].height = 16
+    ws.row_dimensions[5].height = 14
+
+    for i, field in enumerate(fd.fields):
+        col_start = field.start_pos
+        col_end = field.start_pos + field.byte_len - 1
+        color = FIELD_COLORS[i % len(FIELD_COLORS)]
+        fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+
+        _write_layout_cell(ws, 3, col_start, col_end, field.name, fill,
+                           Font(name="メイリオ", size=9, bold=True))
+        _write_layout_cell(ws, 4, col_start, col_end, f"PIC {field.pic}", fill,
+                           Font(name="メイリオ", size=7))
+        _write_layout_cell(ws, 5, col_start, col_end, field.byte_len, fill,
+                           Font(name="メイリオ", size=7, color="555555"))
 
 
 def _create_flow_sheet(wb, parse_result):
