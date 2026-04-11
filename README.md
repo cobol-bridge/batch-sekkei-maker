@@ -107,3 +107,11 @@ MIT License
 | .exeパッケージング | ✅ |
 | ログ出力 | ✅ |
 | インストーラー | 🔨 開発中 |
+
+---
+
+## お問い合わせ・ご要望
+
+バグ報告・機能要望・使い方のご質問はこちらからお気軽にどうぞ。
+
+👉 [お問い合わせフォーム](https://docs.google.com/forms/d/e/1FAIpQLSciA7vifbm0SzZwQU88So6YeTeyZKVlUeo787-0_fSJ4s7--g/viewform?usp=header)

@@ -100,3 +100,11 @@ MIT License — free to use, modify, and distribute.
 This tool is part of the **COBOL BRIDGE** project — building lightweight, free tools to help engineers understand and modernize legacy COBOL systems.
 
 - GitHub: [cobol-bridge](https://github.com/cobol-bridge)
+
+---
+
+## Contact / Feedback
+
+Bug reports, feature requests, and questions are welcome.
+
+👉 [Contact Form](https://docs.google.com/forms/d/e/1FAIpQLSciA7vifbm0SzZwQU88So6YeTeyZKVlUeo787-0_fSJ4s7--g/viewform?usp=header)
