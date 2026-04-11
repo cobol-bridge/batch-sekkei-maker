@@ -198,7 +198,7 @@ def _build_layout_sheet(ws, fd):
     # 桁位置マーカー行（5の倍数に番号）
     for col in range(1, total_bytes + 1):
         c = ws.cell(row=2, column=col)
-        if col % 5 == 1 or col == 1:
+        if col % 5 == 1:
             c.value = col
             c.font = Font(name="メイリオ", size=7, color="888888")
         c.alignment = Alignment(horizontal="center")

@@ -4,6 +4,9 @@ COBOLソースコードのパーサー
 import re
 from dataclasses import dataclass, field
 
+_PIC_CHARS = "X9AZPB"
+_PIC_REPEAT = re.compile(rf"[{_PIC_CHARS}]\((\d+)\)")
+
 
 @dataclass
 class FileDefinition:
@@ -212,19 +215,11 @@ class CobolParser:
     @staticmethod
     def _calc_pic_bytes(pic: str) -> int:
         """PIC句の文字列からバイト数を計算する"""
-        pic = pic.upper()
-        # V（仮想小数点）を除去
-        pic = re.sub(r'V[\w\(\)]*', '', pic)
-        # S（符号）を除去
-        pic = pic.replace('S', '')
-        # X(n) / 9(n) / A(n) などの繰り返し展開
-        total = 0
-        for m in re.finditer(r'[X9AZPB]\((\d+)\)', pic):
-            total += int(m.group(1))
-        # 括弧なしの文字（X, 9 など1文字ずつ）
-        remaining = re.sub(r'[X9AZPB]\(\d+\)', '', pic)
-        total += sum(1 for c in remaining if c in 'X9AZPB')
-        return total if total > 0 else 1
+        pic = re.sub(r'V[\w\(\)]*', '', pic.upper()).replace('S', '')
+        total = sum(int(m.group(1)) for m in _PIC_REPEAT.finditer(pic))
+        remaining = _PIC_REPEAT.sub('', pic)
+        total += sum(1 for c in remaining if c in _PIC_CHARS)
+        return total or 1
 
     def _parse_open_statements(self, lines: list):
         """OPEN文からI/O区分を抽出してfile_definitionsに補完"""
